@@ -8,6 +8,26 @@ import {
   Provider as EthCallProvider
 } from 'ethcall'
 
+const isObject = obj => {
+  return typeof obj === 'object' && !Array.isArray(obj) && obj !== null
+}
+
+const parseExtended = (params: any[]) => {
+  const extended: { blockTag?: number } = isObject(params[params.length - 1])
+    ? params[params.length - 1]
+    : { blockTag: undefined }
+  return extended
+}
+
+const parseParams = params => {
+  const [address, method, ...otherParams] = params
+  const extended = parseExtended(otherParams)
+  if (Object.values(extended).filter(Boolean).length > 0) {
+    // discard the last item because it was an extend object
+    otherParams.pop()
+  }
+  return { params: [address, method, otherParams], extended }
+}
 export const contracts = new Map<string, Contract>()
 export function getContract(address: string, abi: ContractInterface): Contract {
   let contract = contracts.get(address)
@@ -39,11 +59,15 @@ export const call = (
   return provider[baseMethod](param2, ...otherParams)
 }
 export const multiCall = (
-  parameters: string[],
+  parameters: string | any[],
   provider: EthCallProvider,
   ABIs
-): Call => {
-  const [address, method, ...otherParams] = parameters
+): [Call, number?] => {
+  const {
+    params: [address, method, otherParams],
+    extended
+  } = parseParams(parameters)
+
   // it's a contract
   if (isAddress(address)) {
     if (!ABIs) throw new ABIError(`ABI repo not found`)
@@ -51,9 +75,9 @@ export const multiCall = (
     const abi = ABIs.get(address)
     if (!abi) throw new ABINotFound(`ABI not found for ${address}`)
     const contract = new EthCallContract(address, abi)
-    return contract[method](...otherParams)
+    return [contract[method](...otherParams), extended.blockTag]
   }
   const param2 = method
   const baseMethod = address === 'getBalance' ? 'getEthBalance' : address // getBalance, getTransactionCount, etc
-  return provider[baseMethod](param2, ...otherParams)
+  return [provider[baseMethod](param2, ...otherParams), extended.blockTag]
 }
