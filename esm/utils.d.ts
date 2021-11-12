@@ -12,7 +12,7 @@ export declare const call: (
   ABIs: any
 ) => Promise<any>
 export declare const multiCall: (
-  parameters: string[],
+  parameters: string | any[],
   provider: EthCallProvider,
   ABIs: any
-) => Call
+) => [Call, number?]

@@ -12,12 +12,23 @@ export const etherJsFetcher = (provider, ABIs) => {
             // fallback silently
         }
         const [arg1] = parsed || args;
+        // it's a batch call
         if (Array.isArray(arg1)) {
-            // it's a batch call
-            // can we skip this for every call?
+            // TODO LS can we skip this for every call?
+            // yes, perhaps in the future https://github.com/Destiner/ethcall/issues/17
             await ethCallProvider.init(provider);
-            const calls = parsed;
-            return ethCallProvider.all(calls.map(call => multiCall(call, ethCallProvider, ABIs)));
+            const multi = parsed.reduce((memo, key) => {
+                const [call, block] = multiCall(key, ethCallProvider, ABIs);
+                if (memo.block && block !== memo.block) {
+                    throw new Error(`${key} has block ${block} instead of ${memo.block}`);
+                }
+                memo.calls.push(call);
+                return {
+                    calls: memo.calls,
+                    block
+                };
+            }, { calls: [], block: undefined });
+            return ethCallProvider.all(multi.calls, multi.block);
         }
         return call(args, provider, ABIs);
     };
